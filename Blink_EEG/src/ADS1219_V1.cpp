@@ -1,4 +1,4 @@
-#include "ADS1219_OLD.h"
+#include "ADS1219_V1.h"
 
 ADS1219::ADS1219( int ADDR, int RDY_PIN ) {
     _addr = ADDR;
@@ -40,7 +40,7 @@ void ADS1219::setConversionMode( uint8_t convMode ) {
     _wire->endTransmission();  
 }
 
-void ADS1219::startConversion( uint8_t channel ) {
+void ADS1219::setMUX( uint8_t channel) {
     _config_reg &= 0x1F; // Clear first three bits
     _config_reg |= (channel<<5);
 
@@ -48,7 +48,9 @@ void ADS1219::startConversion( uint8_t channel ) {
     _wire->write(WREG_CMD);
     _wire->write(_config_reg);
     _wire->endTransmission();  
+}
 
+void ADS1219::startConversion() {
     _wire->beginTransmission(_addr);
     _wire->write(START_CMD);
     _wire->endTransmission();  
@@ -56,29 +58,23 @@ void ADS1219::startConversion( uint8_t channel ) {
 
 uint32_t ADS1219::readADC() {
     uint32_t data;
-    uint8_t byte1, byte2, byte3;
-    
+    // Wait for _rdy to be low
+    while(REG_READ(GPIO_IN_REG) & (0x00000001 << _rdy));
+     
     _wire->beginTransmission(_addr);
     _wire->write(RDATA_CMD);
     _wire->endTransmission();  
 
-    _wire->requestFrom(_addr, 3, 1);
-    while(3 > _wire->available()) {}
+    _wire->requestFrom(_addr, 3);
     data = _wire->read();
     data <<= 8;
     data |= _wire->read();
     data <<= 8;
     data |= _wire->read();
+
     return (data << 8) >> 8;
-
-
-    //byte1 = _wire->read();
-    //byte2 = _wire->read();
-    //byte3 = _wire->read();
-    //data = 0x00FFFFFF & ( (byte1<<16) | (byte2<<8) | (byte3) );
-    //return data;
 }
 
 float ADS1219::computeVolts( uint32_t data, float refVoltage ) {
-    return float(data)/16777215.0*refVoltage;
+    return float(data)/8388607.0*refVoltage;
 }

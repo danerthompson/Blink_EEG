@@ -1,5 +1,5 @@
-#ifndef ADS1219_OLD_h
-#define ADS1219_OLD_h
+#ifndef ADS1219_V1_h
+#define ADS1219_V1_h
 
 #include <Wire.h>
 
@@ -23,7 +23,7 @@
 #define ADS_CH1 4
 #define ADS_CH2 5
 #define ADS_CH3 6
-#define ADS_VDD2 7
+#define ADS_SHORT 7
 
 class ADS1219 {
     public:
@@ -32,15 +32,16 @@ class ADS1219 {
         void setSpeed( uint8_t speed );
         void setReference( uint8_t ref );
         void setConversionMode( uint8_t convMode );
-        void startConversion( uint8_t channel );
+        void startConversion();
         uint32_t readADC();
         float computeVolts( uint32_t data, float refVoltage );
+        void setMUX( uint8_t channel);
 
     private:
         int _addr;
         int _rdy;
         TwoWire *_wire;
-        uint8_t _config_reg = 0xFF;
+        uint8_t _config_reg = 0x00;
 
 };
 
