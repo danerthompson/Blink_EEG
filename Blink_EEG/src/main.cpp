@@ -3,6 +3,7 @@
 #include "ADS1219_V1.h"
 #include <Wire.h>
 #include <SD.h>
+#include "random_forest_classifier.h"
 
 #define EEG_CH ADS_CH1
 #define ECG_CH ADS_CH0
@@ -59,6 +60,13 @@ void setup() {
     delay(100);
   }
   Serial.setTxTimeoutMs(0); // Remove delay when no USB connection is present
+
+  Serial.print("Starttime: "); Serial.println(micros());
+  float data[3] = {0.000090347133567, 0.048960000000000, -0.000110022471910};
+  Serial.println(predictClass(data));
+  Serial.print("Endtime: "); Serial.println(micros());
+
+  delay(3000);
 
   // SD card initialization
   SPI_SD.begin(SPI_CLK, SPI_MISO, SPI_MOSI, SPI_CS);
