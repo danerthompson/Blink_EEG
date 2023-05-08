@@ -25,7 +25,7 @@
 #define SPI_CLK 0
 #define SPI_CS 1
 
-#define WINDOW_SIZE 250
+#define WINDOW_SIZE 130
 
 float window_data[WINDOW_SIZE] = {0};
 int window_index = 0;
@@ -36,6 +36,7 @@ float minimum, maximum, min_index, max_index;       // Values used to calculate 
 int predictedClass;
 int prevClass;
 int blinkCount = 0;
+unsigned long blinkTimer;
 
 ADS1219 ads(ADC_ADDR, ADC_RDY);
 TwoWire adc_i2c = TwoWire(0);
@@ -78,8 +79,6 @@ void setup() {
   Serial.println(predictClass(data));
   Serial.print("Endtime: "); Serial.println(micros());
 
-  delay(3000);
-
   // SD card initialization
   SPI_SD.begin(SPI_CLK, SPI_MISO, SPI_MOSI, SPI_CS);
   delay(100);
@@ -114,6 +113,8 @@ void setup() {
     window_data[window_index] = ads.computeVolts(ads.readADC(), 3.0);;
     window_index++;
   }
+
+  blinkTimer = millis();
   
 }
 
@@ -165,21 +166,21 @@ void loop() {
   // Calculate amplitude and derivative features
   amplitude = maximum - minimum;
   derivative = amplitude / (max_index - min_index);
-  
-  float features[3] = {standard_dev, amplitude, derivative};
-  predictedClass = predictClass(features);
 
-  if (prevClass == 0 && predictedClass != prevClass) {    // Check if blink changed from 0 to nonzero
-    //Serial.print("Blink detected: "); Serial.println(blinkCount++);
-    if (predictedClass == 1) {
-      Serial.println("Left blink!");
+  if (( (maximum > 1*standard_dev + mean) || (minimum < -1*standard_dev + mean) ) && (millis() - blinkTimer > 500)) {
+    float features[3] = {standard_dev, amplitude, derivative};
+    predictedClass = predictClass(features);
+
+    if (prevClass == 0 && predictedClass != prevClass) {    // Check if blink changed from 0 to nonzero
+      if (predictedClass == 1) {
+        Serial.print("Blink detected: "); Serial.println(blinkCount++);
+      }
+      blinkTimer = millis();
+      digitalWrite(LED, !digitalRead(LED));
     }
-    else if (predictedClass == 2) {
-      Serial.println("Right blink!");
-    }
+    
   }
-
-
+  
   inReg = REG_READ(GPIO_IN_REG);
 
   data = String(millis()) + "," + String(EEG_signal,6) + "," + 
