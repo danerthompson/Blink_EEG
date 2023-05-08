@@ -25,6 +25,18 @@
 #define SPI_CLK 0
 #define SPI_CS 1
 
+#define WINDOW_SIZE 250
+
+float window_data[WINDOW_SIZE] = {0};
+int window_index = 0;
+float standard_dev, amplitude, derivative;  // Three features to be used in classifiers
+float sum, mean;                            // Values used to calculate standard deviation
+float minimum, maximum, min_index, max_index;       // Values used to calculate amplitude and derivative features
+//float features[3] = {0};
+int predictedClass;
+int prevClass;
+int blinkCount = 0;
+
 ADS1219 ads(ADC_ADDR, ADC_RDY);
 TwoWire adc_i2c = TwoWire(0);
 float ref_electrode;
@@ -96,23 +108,84 @@ void setup() {
   ads.setReference(ADS_REF_EXTERNAL);
   ads.setMUX(EEG_CH);
   ads.startConversion();
+
+  // Get initial window of data
+  while (window_index < WINDOW_SIZE) {
+    window_data[window_index] = ads.computeVolts(ads.readADC(), 3.0);;
+    window_index++;
+  }
   
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
 
-  
+  // Make initial min and max the first value in next window
+  minimum = window_data[1];
+  maximum = window_data[1];
+
+  // Shift all data one to the left and record min, max, and their indices
+  for (int i = 1; i < WINDOW_SIZE; i++) {
+    window_data[i-1] = window_data[i];
+    if (window_data[i] < minimum) {
+      minimum = window_data[i];
+      min_index = float(i-1);
+    }
+    else if (window_data[i] > maximum) {
+      maximum = window_data[i];
+      max_index = float(i-1);
+    }
+  }
+
+  // Add new data to last location in window
   EEG_signal = ads.computeVolts(ads.readADC(), 3.0);
-  //Serial.println(EEG_signal,4);
-  //Serial.println(micros());
+  window_data[WINDOW_SIZE-1] = EEG_signal;
+  if (window_data[WINDOW_SIZE-1] < minimum) {
+    minimum = window_data[WINDOW_SIZE-1];
+    min_index = float(WINDOW_SIZE-1);
+  }
+  else if (window_data[WINDOW_SIZE-1] > maximum) {
+    maximum = window_data[WINDOW_SIZE-1];
+    max_index = float(WINDOW_SIZE-1);
+  }
+
+  // Calculate standard deviation feature
+  sum = 0;
+  standard_dev = 0;
+  for (int i = 0; i < WINDOW_SIZE; i++) {
+    sum += window_data[i];
+  }
+  mean = sum / float(WINDOW_SIZE);
+  for (int i = 0; i < WINDOW_SIZE; i++) {
+    standard_dev += (window_data[i] - mean) * (window_data[i] - mean);
+  }
+  standard_dev /= float(WINDOW_SIZE-1);
+  standard_dev = sqrt(standard_dev);
+
+  // Calculate amplitude and derivative features
+  amplitude = maximum - minimum;
+  derivative = amplitude / (max_index - min_index);
+  
+  float features[3] = {standard_dev, amplitude, derivative};
+  predictedClass = predictClass(features);
+
+  if (prevClass == 0 && predictedClass != prevClass) {    // Check if blink changed from 0 to nonzero
+    //Serial.print("Blink detected: "); Serial.println(blinkCount++);
+    if (predictedClass == 1) {
+      Serial.println("Left blink!");
+    }
+    else if (predictedClass == 2) {
+      Serial.println("Right blink!");
+    }
+  }
+
 
   inReg = REG_READ(GPIO_IN_REG);
 
   data = String(millis()) + "," + String(EEG_signal,6) + "," + 
          String((inReg & 0x0000008)>>BUTT_LEFT) + "," + String((inReg & 0x00000010)>>BUTT_MID) + "," + String((inReg & 0x00200000)>>BUTT_RIGHT);
 
-  Serial.println(data);
+  //Serial.println(data);
   //Serial.println(micros());
   //data = String(millis()) + "," + String(ECG_signal,5) + "," + String(EEG_signal,5) + "," + String(bat_voltage,3) + "," + String(ref_electrode,5) + "," +
   //       String((inReg & 0x0000008)>>BUTT_LEFT) + "," + String((inReg & 0x00000010)>>BUTT_MID) + "," + String((inReg & 0x00200000)>>BUTT_RIGHT);
